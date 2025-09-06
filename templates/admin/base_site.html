@@ -1,0 +1,12 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'admin/css/checkbox_grid.css' %}">
+{% endblock %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <script src="{% static 'admin/js/custom_admin.js' %}"></script>
+{% endblock %}

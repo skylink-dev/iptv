@@ -1,0 +1,10 @@
+{% extends "admin/change_list.html" %}
+
+{% block object-tools %}
+    {{ block.super }}
+    <li>
+        <a href="{% url 'admin:partner_tree_view' %}" class="btn btn-info" target="_blank" title="View Partner Tree">
+            <i class="fas fa-sitemap"></i> View Tree
+        </a>
+    </li>
+{% endblock %}

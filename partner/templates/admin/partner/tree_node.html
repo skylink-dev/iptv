@@ -1,0 +1,42 @@
+<div class="tree-node" data-id="{{ node.id }}">
+    <div class="node-content">
+        {% with children=node.get_children %}
+            {% if children %}
+                <div class="toggle-button" onclick="toggleChildren({{ node.id }})" id="toggle-btn-{{ node.id }}">+</div>
+            {% else %}
+                <div style="height: 18px;"></div>
+            {% endif %}
+        {% endwith %}
+
+        <div class="node-info">
+            <span class="node-icon">
+                {% if node.type == "Operator" %}
+                    🏢
+                {% elif node.type == "Distributor" %}
+                    🚛
+                {% elif node.type == "Reseller" %}
+                    🧾
+                {% else %}
+                    📦
+                {% endif %}
+            </span>
+            <strong>{{ node.name }}</strong>
+            <span style="color: #6c757d;">({{ node.type }})</span>
+        </div>
+
+        <div class="node-actions">
+            <a href="{% url 'admin:partner_partner_change' node.id %}" class="edit">Edit</a>
+            <a href="{% url 'admin:partner_partner_delete' node.id %}" class="delete">Delete</a>
+        </div>
+    </div>
+
+    {% with children=node.get_children %}
+        {% if children %}
+            <div class="tree-children">
+                {% for child in children %}
+                    {% include "admin/partner/tree_node.html" with node=child %}
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+</div>

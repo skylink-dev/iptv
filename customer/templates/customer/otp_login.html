@@ -1,0 +1,13 @@
+<form method="post">
+    {% csrf_token %}
+    {{ form.phone.label_tag }} {{ form.phone }} <br><br>
+    
+    <button type="submit" name="send_otp">Send OTP</button> <br><br>
+
+    {{ form.otp.label_tag }} {{ form.otp }} <br><br>
+    <button type="submit" name="verify_otp">Verify OTP</button>
+</form>
+
+{% for message in messages %}
+<p>{{ message }}</p>
+{% endfor %}

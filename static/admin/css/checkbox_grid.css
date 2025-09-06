@@ -1,0 +1,103 @@
+/* ==== Project-wide admin checkbox grid ==== */
+
+/* Grid for UL containers */
+.form-row.field-permissions ul,
+.form-row.field-user_permissions ul,
+#id_permissions,
+#id_user_permissions {
+  display: grid;
+  grid-template-columns: repeat(2, auto); /* Checkbox + Label */
+  gap: 6px 12px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+/* Ensure each LI is 2 columns: checkbox | label */
+.form-row.field-permissions li,
+.form-row.field-user_permissions li,
+#id_permissions li,
+#id_user_permissions li {
+  display: contents; /* let child elements use grid directly */
+}
+
+.form-row.field-permissions li input[type="checkbox"],
+.form-row.field-user_permissions li input[type="checkbox"],
+#id_permissions li input[type="checkbox"],
+#id_user_permissions li input[type="checkbox"] {
+  grid-column: 1;
+  align-self: center;
+}
+
+.form-row.field-permissions li label,
+.form-row.field-user_permissions li label,
+#id_permissions li label,
+#id_user_permissions li label {
+  grid-column: 2;
+  align-self: center;
+  white-space: nowrap;
+}
+
+/* ==== Per-App Group styling ==== */
+.permission-app-group {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  padding: 8px;
+  background: #fafafa;
+}
+
+/* Header with Select All button */
+.permission-app-header {
+  font-weight: bold;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Inside grouped list */
+.permission-app-group ul {
+  display: grid;
+  grid-template-columns: repeat(2, auto); /* checkbox | label */
+  gap: 6px 12px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.permission-app-group li {
+  display: contents; /* children are direct grid items */
+}
+
+.permission-app-group li input[type="checkbox"] {
+  grid-column: 1;
+  align-self: center;
+}
+
+.permission-app-group li label {
+  grid-column: 2;
+  align-self: center;
+  white-space: nowrap;
+}
+
+/* ===== Responsive breakpoints ===== */
+@media (max-width: 768px) {
+  .form-row.field-permissions ul,
+  .form-row.field-user_permissions ul,
+  #id_permissions,
+  #id_user_permissions,
+  .permission-app-group ul {
+    grid-template-columns: 20px 1fr; /* checkbox narrow | label full */
+  }
+}
+
+/* Small button spacing */
+.permission-select-btn {
+  margin-left: 10px;
+  margin-bottom: 5px;
+  padding: 3px 8px;
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
