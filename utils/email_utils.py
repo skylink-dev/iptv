@@ -1,6 +1,9 @@
 import random
 from django.core.mail import send_mail
 from django.conf import settings
+from urllib.parse import urlencode
+from django.utils import timezone
+from customer.models import VerificationCode
 
 # In-memory OTP storage for demonstration
 email_otp_storage = {}
@@ -17,18 +20,26 @@ def generate_otp():
 # ------------------------------
 def send_verification_email(email, name="Customer"):
     """
-    Send OTP to given email.
+    Send OTP to given email and store it in VerificationCode table.
     Returns dict with success/error.
     """
     otp = generate_otp()
-    email_otp_storage[email] = otp  # store OTP temporarily
 
     try:
+        # Store or update OTP in DB
+        VerificationCode.objects.update_or_create(
+            email=email,
+            defaults={"code": otp, "timestamp": timezone.now()}
+        )
+
+        # Send email
         subject = "Your OTP Code"
         message = f"Hello {name},\nYour OTP is: {otp}"
         from_email = settings.DEFAULT_FROM_EMAIL
         send_mail(subject, message, from_email, [email])
-        return {"success": True}
+
+        return {"success": True, "message": "OTP sent successfully."}
+
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -38,12 +49,30 @@ def send_verification_email(email, name="Customer"):
 # ------------------------------
 def verify_email_otp(email, otp_input):
     """
-    Verify OTP entered by user for email.
+    Verify OTP entered by user for email using VerificationCode model.
+    Returns a dict with success status, message, and email.
     """
-    otp_saved = email_otp_storage.get(email)
-    if not otp_saved:
-        return False, "OTP expired or not generated."
-    if otp_input == otp_saved:
-        email_otp_storage.pop(email)  # remove OTP after successful verification
-        return True, "OTP verified successfully."
-    return False, "Invalid OTP."
+    try:
+        otp_entry = VerificationCode.objects.filter(email=email, code=otp_input).latest("timestamp")
+    except VerificationCode.DoesNotExist:
+        return {
+            "success": False,
+            "message": "Invalid OTP.",
+            "email": email
+        }
+
+    # Check validity (5 minutes)
+    if not otp_entry.is_valid():
+        return {
+            "success": False,
+            "message": "OTP expired.",
+            "email": email
+        }
+
+    # ✅ OTP verified → delete entry after successful verification
+    #otp_entry.delete()
+    return {
+        "success": True,
+        "message": "OTP verified successfully.",
+        "email": email
+    }

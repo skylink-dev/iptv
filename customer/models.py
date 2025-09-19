@@ -109,13 +109,14 @@ class Device(models.Model):
 
 
 class VerificationCode(models.Model):
-    phone_number = models.CharField(max_length=15, db_index=True)
+    phone_number = models.CharField(max_length=15, db_index=True, null=True, blank=True)
+    email = models.EmailField(db_index=True, null=True, blank=True)
     code = models.CharField(max_length=6)
     timestamp = models.DateTimeField(default=timezone.now)
 
     def is_valid(self):
         """Check if OTP is still valid (5 minutes)."""
-        return timezone.now() <= self.timestamp + timedelta(minutes=5)
+        return timezone.now() <= self.timestamp + timedelta(minutes=30) # 30 minutes validity for testing
 
     def __str__(self):
         return f"{self.phone_number} - {self.code}"

@@ -4,12 +4,14 @@ from rest_framework import status
 
 from django.shortcuts import get_object_or_404
 from .serializers import OTPRequestSerializer, OTPVerifySerializer, DeviceSerializer
-from utils.sms_utils import send_verification_sms, verify_otp as verify_sms_otp
+from utils.sms_utils import send_verification_sms, verify_sms_otp
+
 from utils.email_utils import send_verification_email, verify_email_otp
 
 from .models import Device, Setting, Customer
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework_simplejwt.tokens import RefreshToken
 class SendOTPAPIView(APIView):
 
     def get_serializer(self, *args, **kwargs):
@@ -54,53 +56,212 @@ class SendOTPAPIView(APIView):
                     return Response({"status": 404, "message": "Customer not found"})
 
         return Response({"status": 400, "message": "Error", "data": serializer.errors})
-
-
 class VerifyOTPAPIView(APIView):
-
-    def get_serializer(self, *args, **kwargs):
-        """Provide default data for DRF Browsable API."""
-        initial = {
-            "phone": "9876543210",
-            "email": "test@example.com",
-            "code": "CUSTOMER123",
-            "otp": "123456",
-        }
-        kwargs.setdefault("initial", initial)
-        return OTPVerifySerializer(*args, **kwargs)
-        
     def post(self, request):
-        # merge defaults from serializer with request data
-        serializer = OTPVerifySerializer(data=request.data or {})
+        serializer = OTPVerifySerializer(data=request.data)
         if serializer.is_valid():
             phone = serializer.validated_data.get("phone")
             email = serializer.validated_data.get("email")
             code = serializer.validated_data.get("code")
             otp = serializer.validated_data.get("otp")
 
+            # Phone OTP flow
             if phone:
-                if verify_sms_otp(phone, otp):
-                    return Response({"status": 200, "message": "Phone OTP verified"})
-                return Response({"status": 400, "message": "Invalid phone OTP"})
+                
+                result = verify_sms_otp(phone, otp)
+                if not result["success"]:
+                    #  OTP failed → return 400 with same message
+                    return Response(
+                        {
+                            "status": 400,
+                            "message": result["message"],
+                            "data": None
+                        },
+                        status=400   # 👈 Django REST Framework actual HTTP status code
+                    )
 
-            elif email:
-                if verify_email_otp(email, otp):
-                    return Response({"status": 200, "message": "Email OTP verified"})
-                return Response({"status": 400, "message": "Invalid email OTP"})
+                customer =     Customer.objects.filter(phone=phone).first()
+               
+                if customer:
+                    refresh = RefreshToken.for_user(customer)
+                    access_token = str(refresh.access_token)
+                    refresh_token = str(refresh)
 
-            elif code:
-                try:
-                    customer = Customer.objects.get(iptv_activation_code=code)
-                    if customer.phone and verify_sms_otp(customer.phone, otp):
-                        return Response({"status": 200, "message": "Code OTP verified via phone"})
-                    elif customer.email and verify_email_otp(customer.email, otp):
-                        return Response({"status": 200, "message": "Code OTP verified via email"})
-                    else:
-                        return Response({"status": 400, "message": "Invalid OTP for this code"})
-                except Customer.DoesNotExist:
-                    return Response({"status": 404, "message": "Customer not found"})
+                    response = Response(
+                        {
+                            "status": 200,
+                            "message": "Success",
+                            "data": {
+                                "loginIdentifier": customer.phone,
+                                "username": getattr(customer, "username", None),
+                                "avatar": getattr(customer, "avatar", None),
+                                "age": getattr(customer, "age", None),
+                                "gender": getattr(customer, "gender", None),
+                                "role": getattr(customer, "role", "USER"),
+                                "currentSessionId": access_token
+                            }
+                        },
+                        status=200
+                    )
 
-        return Response({"status": 400, "message": "Error", "data": serializer.errors})
+                    # 🔐 Store refresh token in HttpOnly cookie
+                    response.set_cookie(
+                        key="JWT_TOKEN",
+                        value=refresh_token,
+                        httponly=True,       # not accessible to JavaScript
+                        secure=False,         # only sent over HTTPS
+                        samesite="Strict",   # prevent CSRF
+                        max_age=60 * 60 * 24 * 7  # expires in 7 days
+                    )
+
+                    return response
+
+                return Response(
+                    {
+                        "status": 404,
+                        "message": "Customer not found",
+                        "data": None
+                    },
+                    status=404
+                )
+
+
+            # Email OTP flow
+            if email:
+                result = verify_email_otp(email, otp)
+                print(result)
+                if not result["success"]:
+                    #  OTP failed → return 400 with same message
+                    return Response(
+                        {
+                            "status": 400,
+                            "message": result["message"],
+                            "data": None
+                        },
+                        status=400   # 👈 Django REST Framework actual HTTP status code
+                    )
+
+                customer =     Customer.objects.filter(email=email).first()
+               
+                if customer:
+                    refresh = RefreshToken.for_user(customer)
+                    access_token = str(refresh.access_token)
+                    refresh_token = str(refresh)
+
+                    response = Response(
+                        {
+                            "status": 200,
+                            "message": "Success",
+                            "data": {
+                                "loginIdentifier": customer.email,
+                                "username": getattr(customer, "username", None),
+                                "avatar": getattr(customer, "avatar", None),
+                                "age": getattr(customer, "age", None),
+                                "gender": getattr(customer, "gender", None),
+                                "role": getattr(customer, "role", "USER"),
+                                "currentSessionId": access_token
+                            }
+                        },
+                        status=200
+                    )
+
+                    # 🔐 Store refresh token in HttpOnly cookie
+                    response.set_cookie(
+                        key="JWT_TOKEN",
+                        value=refresh_token,
+                        httponly=True,       # not accessible to JavaScript
+                        secure=False,         # only sent over HTTPS
+                        samesite="Strict",   # prevent CSRF
+                        max_age=60 * 60 * 24 * 7  # expires in 7 days
+                    )
+
+                    return response
+
+                return Response(
+                    {
+                        "status": 404,
+                        "message": "Customer not found",
+                        "data": None
+                    },
+                    status=404
+                )
+
+            
+            # Code-based flow
+            if code:
+                customer = Customer.objects.filter(iptv_activation_code=code).first()
+                if not customer:
+                    return Response(
+                        {
+                            "status": 404,
+                            "message": "Customer not found",
+                            "data": None
+                        },
+                        status=404
+                    )
+
+                # Try OTP verification using phone/email from customer
+                if customer.phone:
+                    result = verify_sms_otp(customer.phone, otp)
+                elif customer.email:
+                    result = verify_email_otp(customer.email, otp)
+                else:
+                    return Response(
+                        {
+                            "status": 400,
+                            "message": "No contact info found",
+                            "data": None
+                        },
+                        status=400
+                    )
+
+                if not result["success"]:
+                    return Response(
+                        {
+                            "status": 400,
+                            "message": result["message"],
+                            "data": None
+                        },
+                        status=400
+                    )
+
+                # ✅ OTP success → generate tokens
+                refresh = RefreshToken.for_user(customer)
+                access_token = str(refresh.access_token)
+                refresh_token = str(refresh)
+
+                response = Response(
+                    {
+                        "status": 200,
+                        "message": "Success",
+                        "data": {
+                            "loginIdentifier": code,  # 👈 Use code as identifier
+                            "username": getattr(customer, "username", None),
+                            "avatar": getattr(customer, "avatar", None),
+                            "age": getattr(customer, "age", None),
+                            "gender": getattr(customer, "gender", None),
+                            "role": getattr(customer, "role", "USER"),
+                            "currentSessionId": access_token
+                        }
+                    },
+                    status=200
+                )
+
+                # 🔐 Store refresh token in HttpOnly cookie
+                response.set_cookie(
+                    key="JWT_TOKEN",
+                    value=refresh_token,
+                    httponly=True,
+                    secure=False,
+                    samesite="Strict",
+                    max_age=60 * 60 * 24 * 7
+                )
+
+                return response
+
+        return Response({"status": 400, "message": "Validation error", "data": serializer.errors})
+
+
 
 
 

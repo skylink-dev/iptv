@@ -27,14 +27,21 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 REST_FRAMEWORK = {
+    # Custom JSON renderer
     "DEFAULT_RENDERER_CLASSES": [
-        "utils.renderers.PrettyJSONRenderer",  # use the class defined above
+        "utils.renderers.PrettyJSONRenderer",
         "rest_framework.renderers.BrowsableAPIRenderer",
     ],
+    # Parser for JSON requests
     "DEFAULT_PARSER_CLASSES": [
         "rest_framework.parsers.JSONParser",
     ],
+    # JWT Authentication
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ],
 }
+
 # Application definition
 
 INSTALLED_APPS = [

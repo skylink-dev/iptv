@@ -8,6 +8,8 @@ router = DefaultRouter()
 router.register(r'devices', DeviceViewSet, basename="device")
 
 urlpatterns = [
+
+
     # OTP views
     path("otp-login/", otp_login_view, name="otp-login"),
     path("send-otp/", SendOTPAPIView.as_view(), name="send-otp"),

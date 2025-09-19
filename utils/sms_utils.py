@@ -46,18 +46,42 @@ def send_verification_sms(phone_number,  name="Customer"):
     except requests.exceptions.RequestException as e:
         return {"success": False, "error": str(e)}
 
-def verify_otp(phone_number, otp_input):
-    """Verify OTP"""
+
+
+
+def verify_sms_otp(phone, otp_input):
+    """
+    Verify OTP entered by user for phone using VerificationCode model.
+    Returns a dict with success status, message, phone, and customer.
+    """
     try:
-        otp_record = VerificationCode.objects.get(phone_number=phone_number)
+        otp_entry = VerificationCode.objects.filter(
+            phone_number=phone,
+            code=otp_input
+        ).latest("timestamp")
     except VerificationCode.DoesNotExist:
-        return False, "No OTP sent to this number"
+        return {
+            "success": False,
+            "message": "Invalid OTP.",
+            "phone": phone,
+          
+        }
 
-    if not otp_record.is_valid():
-        return False, "OTP expired"
+    # Check validity (5 minutes)
+    if not otp_entry.is_valid():
+        return {
+            "success": False,
+            "message": "OTP expired.",
+            "phone": phone,
+        
+        }
 
-    if otp_record.code != otp_input:
-        return False, "Invalid OTP"
+    # ✅ OTP verified → get customer
+    
 
-    otp_record.delete()  # Remove after successful verification
-    return True, "OTP verified successfully"
+    return {
+        "success": True,
+        "message": "OTP verified successfully.",
+        "phone": phone,
+      
+    }

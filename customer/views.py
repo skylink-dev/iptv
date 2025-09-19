@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from customer.forms import OTPLoginForm
-from utils.sms_utils import send_verification_sms, verify_otp
+from utils.sms_utils import send_verification_sms
 from customer.models import Customer
 
 def otp_login_view(request):
@@ -23,18 +23,6 @@ def otp_login_view(request):
                 messages.success(request, f"OTP sent to {phone}")
             else:
                 messages.error(request, f"Failed to send OTP: {result.get('error')}")
-
-        elif "verify_otp" in request.POST:
-            is_valid, msg = verify_otp(phone, otp_input)
-            if is_valid:
-                messages.success(request, msg)
-                # Log in customer session
-                customer = Customer.objects.filter(phone=phone).first()
-                if customer:
-                    request.session["customer_id"] = customer.id
-                return redirect("dashboard")
-            else:
-                messages.error(request, msg)
 
     return render(request, "customer/otp_login.html", {"form": form})
 
