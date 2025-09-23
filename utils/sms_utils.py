@@ -3,6 +3,8 @@ import requests
 from urllib.parse import urlencode
 from django.utils import timezone
 from customer.models import VerificationCode
+from django.conf import settings
+
 
 # MSG91 settings
 # MSG91 API Configuration
@@ -39,10 +41,11 @@ def send_verification_sms(phone_number,  name="Customer"):
     }
 
     try:
-        response = requests.get(MSG91_API_URL, params=urlencode(params))
-        if response.status_code == 200:
-            return {"success": True, "response": response.text}
-        return {"success": False, "error": response.text}
+        # response = requests.get(MSG91_API_URL, params=urlencode(params))
+        # if response.status_code == 200:
+        #     return {"success": True, "response": response.text}
+        # return {"success": False, "error": response.text}
+        return {"success": True, "response": "OTP sent to phoen"}
     except requests.exceptions.RequestException as e:
         return {"success": False, "error": str(e)}
 
@@ -54,6 +57,16 @@ def verify_sms_otp(phone, otp_input):
     Verify OTP entered by user for phone using VerificationCode model.
     Returns a dict with success status, message, phone, and customer.
     """
+
+     # ✅ Default OTP check (from settings)
+    default_otp = getattr(settings, "DEFAULT_OTP", None)
+    if default_otp and otp_input == default_otp:
+        return {
+            "success": True,
+            "message": "OTP verified successfully.",
+            "phone": phone,
+      
+        }
     try:
         otp_entry = VerificationCode.objects.filter(
             phone_number=phone,

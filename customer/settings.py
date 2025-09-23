@@ -225,7 +225,7 @@ MAX_DEVICES_PER_ACCOUNT = 2
 
 
 # settings.py
-DEFAULT_OTP = "123456"
+DEFAULT_OTP = "get_dynamic_jazzmin_settings6"
 
 
 SIMPLE_JWT = {

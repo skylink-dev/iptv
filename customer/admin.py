@@ -7,7 +7,7 @@ from .models import Customer, Device, VerificationCode, Setting
 class DeviceInline(admin.TabularInline):
     model = Device
     extra = 1
-    fields = ("device_name", "device_id", "ip_address", "last_login", "status")
+    fields = ("device_name", "device_model", "device_id", "device_type",  "ip_address", "last_login", "status")
     readonly_fields = ("last_login",)
 
 
@@ -62,7 +62,7 @@ class CustomerAdmin(admin.ModelAdmin):
 @admin.register(Device)
 class DeviceAdmin(admin.ModelAdmin):
     list_display = (
-        "id", "customer", "device_name", "device_id",
+        "id", "customer", "device_name", "device_model", "device_type", "device_id",
         "ip_address", "status", "last_login", "created_at", "action_buttons"
     )
     list_filter = ("status", "customer")

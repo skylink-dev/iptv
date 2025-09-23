@@ -3,15 +3,21 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from django.shortcuts import get_object_or_404
-from .serializers import OTPRequestSerializer, OTPVerifySerializer, DeviceSerializer
+from .serializers import OTPRequestSerializer, OTPVerifySerializer, ReplaceDeviceSerializer, ProfileSerializer
 from utils.sms_utils import send_verification_sms, verify_sms_otp
 
 from utils.email_utils import send_verification_email, verify_email_otp
+from utils.device_verified_utils import device_check_after_login
 
-from .models import Device, Setting, Customer
+from .models import Device, Setting, Customer, Profile
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.utils import timezone
+import os
+from django.conf import settings
+from rest_framework.permissions import IsAuthenticated
+
 class SendOTPAPIView(APIView):
 
     def get_serializer(self, *args, **kwargs):
@@ -65,295 +71,366 @@ class VerifyOTPAPIView(APIView):
             code = serializer.validated_data.get("code")
             otp = serializer.validated_data.get("otp")
 
-            # Phone OTP flow
+            customer = None
+            result = None
+
+            # 🔹 Phone OTP flow
             if phone:
-                
+                customer = Customer.objects.filter(phone=phone).first()
                 result = verify_sms_otp(phone, otp)
-                if not result["success"]:
-                    #  OTP failed → return 400 with same message
-                    return Response(
-                        {
-                            "status": 400,
-                            "message": result["message"],
-                            "data": None
-                        },
-                        status=400   # 👈 Django REST Framework actual HTTP status code
-                    )
+                otp_failed_status = 400  # or 400 if you prefer
 
-                customer =     Customer.objects.filter(phone=phone).first()
-               
-                if customer:
-                    refresh = RefreshToken.for_user(customer)
-                    access_token = str(refresh.access_token)
-                    refresh_token = str(refresh)
-
-                    response = Response(
-                        {
-                            "status": 200,
-                            "message": "Success",
-                            "data": {
-                                "loginIdentifier": customer.phone,
-                                "username": getattr(customer, "username", None),
-                                "avatar": getattr(customer, "avatar", None),
-                                "age": getattr(customer, "age", None),
-                                "gender": getattr(customer, "gender", None),
-                                "role": getattr(customer, "role", "USER"),
-                                "currentSessionId": access_token
-                            }
-                        },
-                        status=200
-                    )
-
-                    # 🔐 Store refresh token in HttpOnly cookie
-                    response.set_cookie(
-                        key="JWT_TOKEN",
-                        value=refresh_token,
-                        httponly=True,       # not accessible to JavaScript
-                        secure=False,         # only sent over HTTPS
-                        samesite="Strict",   # prevent CSRF
-                        max_age=60 * 60 * 24 * 7  # expires in 7 days
-                    )
-
-                    return response
-
-                return Response(
-                    {
-                        "status": 404,
-                        "message": "Customer not found",
-                        "data": None
-                    },
-                    status=404
-                )
-
-
-            # Email OTP flow
-            if email:
+            # 🔹 Email OTP flow
+            elif email:
+                customer = Customer.objects.filter(email=email).first()
                 result = verify_email_otp(email, otp)
-                print(result)
-                if not result["success"]:
-                    #  OTP failed → return 400 with same message
-                    return Response(
-                        {
-                            "status": 400,
-                            "message": result["message"],
-                            "data": None
-                        },
-                        status=400   # 👈 Django REST Framework actual HTTP status code
-                    )
+                otp_failed_status = 400
 
-                customer =     Customer.objects.filter(email=email).first()
-               
-                if customer:
-                    refresh = RefreshToken.for_user(customer)
-                    access_token = str(refresh.access_token)
-                    refresh_token = str(refresh)
-
-                    response = Response(
-                        {
-                            "status": 200,
-                            "message": "Success",
-                            "data": {
-                                "loginIdentifier": customer.email,
-                                "username": getattr(customer, "username", None),
-                                "avatar": getattr(customer, "avatar", None),
-                                "age": getattr(customer, "age", None),
-                                "gender": getattr(customer, "gender", None),
-                                "role": getattr(customer, "role", "USER"),
-                                "currentSessionId": access_token
-                            }
-                        },
-                        status=200
-                    )
-
-                    # 🔐 Store refresh token in HttpOnly cookie
-                    response.set_cookie(
-                        key="JWT_TOKEN",
-                        value=refresh_token,
-                        httponly=True,       # not accessible to JavaScript
-                        secure=False,         # only sent over HTTPS
-                        samesite="Strict",   # prevent CSRF
-                        max_age=60 * 60 * 24 * 7  # expires in 7 days
-                    )
-
-                    return response
-
-                return Response(
-                    {
-                        "status": 404,
-                        "message": "Customer not found",
-                        "data": None
-                    },
-                    status=404
-                )
-
-            
-            # Code-based flow
-            if code:
+            # 🔹 Code-based flow
+            elif code:
                 customer = Customer.objects.filter(iptv_activation_code=code).first()
-                if not customer:
-                    return Response(
-                        {
-                            "status": 404,
-                            "message": "Customer not found",
-                            "data": None
-                        },
-                        status=404
-                    )
+                if customer:
+                    if customer.phone:
+                        result = verify_sms_otp(customer.phone, otp)
+                    elif customer.email:
+                        result = verify_email_otp(customer.email, otp)
+                    else:
+                        return Response(
+                            {"status": 400, "message": "No contact info found", "data": None},
+                            status=400,
+                        )
+                otp_failed_status = 400
 
-                # Try OTP verification using phone/email from customer
-                if customer.phone:
-                    result = verify_sms_otp(customer.phone, otp)
-                elif customer.email:
-                    result = verify_email_otp(customer.email, otp)
-                else:
-                    return Response(
-                        {
-                            "status": 400,
-                            "message": "No contact info found",
-                            "data": None
-                        },
-                        status=400
-                    )
-
-                if not result["success"]:
-                    return Response(
-                        {
-                            "status": 400,
-                            "message": result["message"],
-                            "data": None
-                        },
-                        status=400
-                    )
-
-                # ✅ OTP success → generate tokens
-                refresh = RefreshToken.for_user(customer)
-                access_token = str(refresh.access_token)
-                refresh_token = str(refresh)
-
-                response = Response(
-                    {
-                        "status": 200,
-                        "message": "Success",
-                        "data": {
-                            "loginIdentifier": code,  # 👈 Use code as identifier
-                            "username": getattr(customer, "username", None),
-                            "avatar": getattr(customer, "avatar", None),
-                            "age": getattr(customer, "age", None),
-                            "gender": getattr(customer, "gender", None),
-                            "role": getattr(customer, "role", "USER"),
-                            "currentSessionId": access_token
-                        }
-                    },
-                    status=200
-                )
-
-                # 🔐 Store refresh token in HttpOnly cookie
-                response.set_cookie(
-                    key="JWT_TOKEN",
-                    value=refresh_token,
-                    httponly=True,
-                    secure=False,
-                    samesite="Strict",
-                    max_age=60 * 60 * 24 * 7
-                )
-
-                return response
-
-        return Response({"status": 400, "message": "Validation error", "data": serializer.errors})
-
-
-
-
-
-class DeviceViewSet(viewsets.ModelViewSet):
-    queryset = Device.objects.all()
-    serializer_class = DeviceSerializer
-
-    # ✅ Limit max devices per customer (e.g. 3 devices)
-    def create(self, request, *args, **kwargs):
-        customer_id = request.data.get("customer")
-        max_devices = 3
-
-        if customer_id:
-            existing_devices = Device.objects.filter(customer_id=customer_id).count()
-            if existing_devices >= max_devices:
+            # 🔹 Customer not found
+            if not customer:
                 return Response(
-                    {"error": f"Customer already has {max_devices} devices."},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"status": 404, "message": "Customer not found", "data": None},
+                    status=404,
+                )
+            
+            # if customer.account_status != "active":
+            #     return Response(
+            #         {
+            #             "status": 403,
+            #             "message": f"Account is {customer.account_status}, please contact support.",
+            #         },
+            #         status=403,
+            #     )
+
+            # 🔹 OTP failed
+            if not result or not result.get("success"):
+                return Response(
+                    {"status": otp_failed_status, "message": result.get("message", "OTP failed"), "data": None},
+                    status=otp_failed_status,
+                )
+            
+            
+
+            # ✅ OTP success → call device check to handle max devices
+            refresh = RefreshToken.for_user(customer)
+            access_token = str(refresh.access_token)
+            refresh_token = str(refresh)
+
+            return device_check_after_login(request, customer, access_token, refresh_token)
+
+        else:
+            # ❌ Validation failed
+            error_messages = []
+            for field, errors in serializer.errors.items():
+                for err in errors:
+                    error_messages.append(f"{field}: {err}")
+            error_string = " | ".join(error_messages)
+
+            return Response(
+                {
+                    "status": 400,
+                    "message": error_string,  # errors as string
+                    "data": serializer.errors,  # keep full details if needed
+                },
+                status=400,
+            )
+            # return Response(
+            #     {"status": 400, "message": "Validation error", "data": serializer.errors},
+            #     status=400,
+            # )
+class ReplaceDeviceAPIView(APIView):
+    def post(self, request):
+        serializer = ReplaceDeviceSerializer(data=request.data)
+
+        # validate first
+        if not serializer.is_valid():
+            return Response(
+                {"status": 400, "message": "Validation error", "data": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        data = serializer.validated_data
+        customer_id = data["customer_id"]
+        
+
+        # check if customer exists
+        customer = Customer.objects.filter(id=customer_id).first()
+        print(customer)
+        if not customer:
+            return Response(
+                {"status": 404, "message": "Customer not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # check if old device exists
+        old_device = Device.objects.filter(customer=customer, device_id=data["delete_device_id"]).first()
+        if not old_device:
+            return Response(
+                {"status": 404, "message": "Old device not found", "data": None},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        #  Delete old device
+        old_device.delete()
+
+        # register new device
+        new_device = Device.objects.create(
+            customer=customer,
+            device_id=data["device_id"],
+            device_name=data["device_name"],
+            device_model=data["device_model"],
+            device_type=data["device_type"],
+            ip_address=request.META.get("REMOTE_ADDR"),
+            last_login=timezone.now(),
+            status="active"
+        )
+
+        # generate JWT tokens
+        refresh = RefreshToken.for_user(customer)
+        access_token = str(refresh.access_token)
+        refresh_token = str(refresh)
+    #return device_check_after_login(request, customer, access_token, refresh_token)
+        # prepare response
+        # response = Response(
+        #     {
+        #         "status": 200,
+        #         "message": "Device replaced and logged in successfully",
+        #         "data": {
+        #             "old_device_id": old_device.device_id,
+        #             "new_device_id": new_device.device_id,
+        #             "device_name": new_device.device_name,
+        #             "device_model": new_device.device_model,
+        #             "device_type": new_device.device_type,
+        #             "last_login": new_device.last_login.strftime("%Y-%m-%d %H:%M:%S"),
+        #             "access_token": access_token
+        #         },
+               
+        #     },
+        #     status=status.HTTP_200_OK
+        # )
+
+        # ✅ Define serializer once so it’s available in all cases
+        customer_serializer = CustomerSerializer(customer)
+        response = Response(
+            {
+                "status": 200,
+                "message": "Success",
+                "data": {
+                    **customer_serializer.data,
+                    "access_token": access_token,
+                },
+            },
+            status=status.HTTP_200_OK,
+        )
+        response.set_cookie(
+            key="JWT_TOKEN",
+            value=refresh_token,
+            httponly=False,
+            secure=False,
+            samesite="Lax",
+            max_age=60 * 60 * 24 * 7,
+        )
+   
+
+        return response
+    
+
+
+from .serializers import CustomerSerializer
+from rest_framework_simplejwt.exceptions import TokenError
+class VerifyAuthToken(APIView):
+    def get(self, request):
+        token = request.COOKIES.get("JWT_TOKEN")
+        if not token:
+            return Response({"status": 401, "message": "Unauthorised"}, status=401)
+
+        try:
+            refresh = RefreshToken(token)
+            user_id = refresh["user_id"]   # extract claim
+
+            # fetch customer
+            customer = Customer.objects.filter(id=user_id).first()
+            if not customer:
+                return Response(
+                    {"status": 404, "message": "Customer not found"},
+                    status=404,
                 )
 
-        return super().create(request, *args, **kwargs)
+            serializer = CustomerSerializer(customer)
+
+            return Response(
+                {
+                    "status": 200,
+                    "message": "Token valid",
+                    "data": serializer.data,
+                },
+                status=200,
+            )
+        except TokenError:
+            return Response(
+                {"status": 401, "message": "Token invalid or expired"},
+                status=401,
+            )
+        
+
+class CustomerProfilesAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        customer = request.user  # comes from JWT
+        if not customer or not isinstance(customer, Customer):
+            return Response({"status": 404, "message": "Customer not found"}, status=404)
+
+        serializer = CustomerSerializer(customer)
+        return Response({"status": 200, "message": "Success", "data": serializer.data})
     
-    @action(detail=False, methods=['delete'], url_path='delete-all')
-    def delete_all(self, request):
-        customer_id = request.query_params.get('customer')
-        if not customer_id:
-            return Response({"error": "Customer ID required"}, status=status.HTTP_400_BAD_REQUEST)
-        deleted_count, _ = Device.objects.filter(customer_id=customer_id).delete()
-        return Response({"success": f"{deleted_count} devices deleted"}, status=status.HTTP_200_OK)
-    
-    @action(detail=False, methods=['post'], url_path='replace')
-    def replace_device(self, request):
-        customer_id = request.data.get("customer")
-        device_id = request.data.get("device_id")
-
-        if not customer_id or not device_id:
-            return Response({"error": "customer and device_id are required"},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        # Delete existing device with the same device_id for this customer
-        Device.objects.filter(customer_id=customer_id, device_id=device_id).delete()
-
-        # Add the new device
-        serializer = DeviceSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response({"success": "Device replaced successfully", "device": serializer.data},
-                            status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-
-class ReplaceDeviceAPIView(APIView):
-    """
-    Replace an existing device for a customer:
-    1. Delete device specified by 'delete_existing_device_id'.
-    2. Add a new device using provided details.
-    """
+class CreateProfileAPIView(APIView):
+    permission_classes = [IsAuthenticated]  # JWT from cookie will set request.user
 
     def post(self, request):
-        customer_id = request.data.get("customer")
-        delete_device_id = request.data.get("delete_existing_device_id")
-
-        if not customer_id or not delete_device_id:
+        customer = request.user  # comes from JWT
+        if not customer:
             return Response(
-                {"error": "Both 'customer' and 'delete_existing_device_id' are required."},
-                status=status.HTTP_400_BAD_REQUEST
+                {"status": 404, "message": "Customer not found"},
+                status=404
             )
 
-        # Step 1: Delete existing device
-        Device.objects.filter(customer_id=customer_id, device_id=delete_device_id).delete()
+        data = {
+            "customer": customer.id,  # pass ID to serializer
+            "profile_name": request.data.get("profile_name", "New Profile"),
+            "profile_type": request.data.get("profile_type", "adult"),
+            "avatar_url": request.data.get("avatar_url"),
+        }
 
-        # Step 2: Check max devices
-        setting = Setting.objects.first()
-        max_devices = setting.max_devices if setting else 3
-        device_count = Device.objects.filter(customer_id=customer_id).count()
-        if device_count >= max_devices:
-            return Response(
-                {"error": f"Customer already has maximum {max_devices} devices."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Step 3: Prepare new device data
-        data = request.data.copy()
-        data.pop("delete_existing_device_id", None)
-
-        # Step 4: Save new device
-        serializer = DeviceSerializer(data=data)
+        serializer = ProfileSerializer(data=data)
         if serializer.is_valid():
-            serializer.save()
+            serializer.save(customer=customer)  # ensure FK is bound correctly
             return Response(
-                {"success": "Device replaced successfully.", "device": serializer.data},
-                status=status.HTTP_201_CREATED
+                {"status": 200, "message": "Profile created", "data": serializer.data},
+                status=200
             )
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"status": 400, "message": "Validation failed", "errors": serializer.errors},
+            status=400
+        )
+
+
+
+class ProfileDetailByCodeAPIView(APIView):
+    def get(self, request, profile_code):
+        profile = Profile.objects.filter(profile_code=profile_code).first()
+        if not profile:
+            return Response({"status": 404, "message": "Profile not found"}, status=404)
+        
+        profile_data = ProfileSerializer(profile).data
+        customer_data = CustomerSerializer(profile.customer).data
+
+        return Response({
+            "status": 200,
+            "message": "Success",
+            "data": {
+                "profile": profile_data,
+                "customer": customer_data
+            }
+        })
+    
+
+
+    
+# ---------------------------
+# Edit a single profile
+# ---------------------------
+class EditProfileAPIView(APIView):
+    def post(self, request, profile_id):
+        profile = Profile.objects.filter(id=profile_id).first()
+        if not profile:
+            return Response({"status": 404, "message": "Profile not found"}, status=404)
+        
+        # Get data from request or fallback to existing values
+        profile_name = request.data.get("profile_name", profile.profile_name)
+        profile_type = request.data.get("profile_type", profile.profile_type)
+      
+        avatar_url = request.data.get("avatar_url")  # select from predefined list
+
+        # Update fields
+        profile.profile_name = profile_name
+        profile.profile_type = profile_type
+
+        # Update avatar: priority to uploaded file, then avatar_url, else keep existing
+       
+        profile.avatar_url = avatar_url
+        # else: keep existing avatar (can be null)
+
+        profile.save()
+
+        serializer = ProfileSerializer(profile)
+        return Response({
+            "status": 200,
+            "message": "Profile updated",
+            "data": serializer.data
+        })
+
+
+
+# ---------------------------
+# Delete a single profile
+# ---------------------------
+class DeleteProfileAPIView(APIView):
+    def delete(self, request, profile_id):
+        profile = Profile.objects.filter(id=profile_id).first()
+        if not profile:
+            return Response({"status": 404, "message": "Profile not found"}, status=404)
+        profile.delete()
+        return Response({"status": 200, "message": "Profile deleted"})
+
+
+# ---------------------------
+# Delete all profiles of a customer
+# ---------------------------
+class DeleteAllProfilesAPIView(APIView):
+    def delete(self, request, customer_id):
+        customer = Customer.objects.filter(id=customer_id).first()
+        if not customer:
+            return Response({"status": 404, "message": "Customer not found"}, status=404)
+
+        profiles = Profile.objects.filter(customer=customer)
+        deleted_count = profiles.count()
+        profiles.delete()
+
+        return Response({
+            "status": 200,
+            "message": f"Deleted {deleted_count} profiles for customer {customer.name}"
+        })
+    
+
+class AvailableAvatarsAPIView(APIView):
+    def get(self, request):
+        avatars_path = os.path.join(settings.MEDIA_ROOT, 'avatars')
+        avatar_files = []
+        if os.path.exists(avatars_path):
+            avatar_files = [
+                f"http://{request.get_host()}/media/avatars/{file_name}"
+                for file_name in os.listdir(avatars_path)
+                if os.path.isfile(os.path.join(avatars_path, file_name))
+            ]
+
+        return Response({
+            "status": 200,
+            "message": "Success",
+            "data": avatar_files
+        })

@@ -4,7 +4,8 @@ from iptvengine.models import Tariff
 
 from django.utils import timezone
 from datetime import timedelta
-
+import string
+import random
 
 class Customer(models.Model):
     customer_id = models.CharField(
@@ -90,6 +91,8 @@ class Device(models.Model):
     )
     device_name = models.CharField(max_length=100, blank=True, null=True)  # e.g., Mobile, TV, Laptop
     device_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    device_model = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    device_type  = models.CharField(max_length=100, blank=True, null=True, db_index=True)
     ip_address = models.GenericIPAddressField(blank=True, null=True)
     last_login = models.DateTimeField(blank=True, null=True)
     status = models.CharField(
@@ -116,7 +119,7 @@ class VerificationCode(models.Model):
 
     def is_valid(self):
         """Check if OTP is still valid (5 minutes)."""
-        return timezone.now() <= self.timestamp + timedelta(minutes=30) # 30 minutes validity for testing
+        return timezone.now() <= self.timestamp + timedelta(minutes=3000) # 50hour  validity for testing
 
     def __str__(self):
         return f"{self.phone_number} - {self.code}"
@@ -137,3 +140,51 @@ class Setting(models.Model):
 
     def __str__(self):
         return f"Max Devices: {self.max_devices}"
+
+
+
+
+class Profile(models.Model):
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.CASCADE,
+        related_name="profiles",
+        null=True,       # allow null in DB
+        blank=True       # allow blank in forms
+    )
+    profile_name = models.CharField(max_length=50, default="New Profile")
+    profile_type = models.CharField(
+        max_length=20,
+        choices=[("adult", "Adult"), ("kids", "Kids")],
+        default="adult"
+    )
+    avatar_url = models.URLField(
+        max_length=500,
+        null=True,
+        blank=True,
+        help_text="Full URL to avatar image"
+    )
+    profile_code = models.CharField(
+        max_length=15,
+        unique=True,
+        editable=False,
+        null=True,
+        blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if not self.profile_code:
+            self.profile_code = self.generate_unique_code()
+        super().save(*args, **kwargs)
+
+    def generate_unique_code(self):
+        import string, random
+        chars = string.ascii_uppercase + string.digits
+        while True:
+            code = ''.join(random.choices(chars, k=15))
+            if not Profile.objects.filter(profile_code=code).exists():
+                return code
+
+    def __str__(self):
+        return f"{self.profile_name} ({self.customer.name if self.customer else 'No Customer'})"

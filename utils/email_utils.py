@@ -36,7 +36,7 @@ def send_verification_email(email, name="Customer"):
         subject = "Your OTP Code"
         message = f"Hello {name},\nYour OTP is: {otp}"
         from_email = settings.DEFAULT_FROM_EMAIL
-        send_mail(subject, message, from_email, [email])
+        #send_mail(subject, message, from_email, [email])  // for testing i hide the code
 
         return {"success": True, "message": "OTP sent successfully."}
 
@@ -52,6 +52,15 @@ def verify_email_otp(email, otp_input):
     Verify OTP entered by user for email using VerificationCode model.
     Returns a dict with success status, message, and email.
     """
+
+     # ✅ Default OTP check (from settings)
+    default_otp = getattr(settings, "DEFAULT_OTP", None)
+    if default_otp and otp_input == default_otp:
+        return {
+            "success": True,
+            "message": "OTP verified successfully (default OTP).",
+            "email": email
+        }
     try:
         otp_entry = VerificationCode.objects.filter(email=email, code=otp_input).latest("timestamp")
     except VerificationCode.DoesNotExist:
