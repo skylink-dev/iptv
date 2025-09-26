@@ -44,7 +44,16 @@ def get_dynamic_jazzmin_settings():
                     {"model": "iptvengine.device", "name": "🛰 Devices"},
                     {"model": "iptvengine.radio", "name": "📻 Radio"},
                 ],
-            }
+            }, {
+                "app": "customer",
+                "label": "▶ Customer",
+                "icon": "fas fa-user-circle",
+                "models": [
+                    {"model": "customer.customer", "name": "👤 Customers"},
+                    {"model": "customer.profile", "name": "📝 Profiles"},
+                    {"model": "customer.Favorite", "name": "⭐ Favorites"},
+                ],
+            },
         ],
 
         "model_icons": {
@@ -57,6 +66,7 @@ def get_dynamic_jazzmin_settings():
             "iptvengine.tariff": "fas fa-money-bill",
             "iptvengine.device": "fas fa-tablet-alt",
             "iptvengine.radio": "fas fa-broadcast-tower",
+            "customer.Favorite": "fas fa-star",
         },
 
         "related_modal_active": settings_obj.related_modal_active,

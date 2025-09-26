@@ -2,9 +2,9 @@ from django.conf import settings
 from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework import status
-from customer.models import Device
+from customer.models import Device, Profile
 from customer.serializers import CustomerSerializer
-
+import requests
 MAX_DEVICES = getattr(settings, "MAX_DEVICES_PER_ACCOUNT", 2)
 
 def device_check_after_login(request, customer, access_token, refresh_token):
@@ -45,7 +45,7 @@ def device_check_after_login(request, customer, access_token, refresh_token):
         )
         response.set_cookie(
             key="JWT_TOKEN",
-            value=refresh_token,
+            value=access_token,
             httponly=False,
             secure=False,
             samesite="Lax",
@@ -78,7 +78,7 @@ def device_check_after_login(request, customer, access_token, refresh_token):
         )
         response.set_cookie(
             key="JWT_TOKEN",
-            value=refresh_token,
+            value=access_token,
             httponly=False,
             secure=False,
             samesite="Lax",
@@ -114,3 +114,99 @@ def device_check_after_login(request, customer, access_token, refresh_token):
         },
         status=207,
     )
+
+
+
+def get_current_profile(request, customer):
+    profile_code = request.headers.get("Current-Profile-Code")
+
+    if not profile_code:
+        return None
+
+    return Profile.objects.filter(profile_code=profile_code, customer=customer).first()
+
+
+
+def get_client_ip(request):
+    """
+    Returns the client's public IP if possible.
+    """
+    x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+    if x_forwarded_for:
+        # The first IP is usually the public client IP
+        ip = x_forwarded_for.split(",")[0].strip()
+        # Sometimes proxies include private IPs; ignore those
+        if ip.startswith("192.") or ip.startswith("10.") or ip.startswith("172.16."):
+            ip = None
+    else:
+        ip = request.META.get("REMOTE_ADDR")
+
+    # Fallback: fetch public IP using external service (for testing if LAN/private IP)
+    if not ip:
+        try:
+            ip = requests.get("https://api.ipify.org", timeout=3).text
+        except:
+            ip = None
+    return ip
+def get_weather(request):
+    """
+    Fetch weather using priority: lat/lon > city > public IP
+    Always returns all fields. Missing data set to None.
+    """
+    lat = request.GET.get("lat")
+    lon = request.GET.get("lon")
+    city = request.GET.get("city")
+
+    # Fallback to public IP if no lat/lon and no city
+    if (not lat or not lon) and not city:
+        try:
+            ip = requests.get("https://api.ipify.org", timeout=3).text
+            if ip:
+                ip_data = requests.get(f"http://ip-api.com/json/{ip}", timeout=5).json()
+                lat = ip_data.get("lat")
+                lon = ip_data.get("lon")
+                city = ip_data.get("city")
+        except:
+            # Ignore errors, fields will stay None
+            pass
+
+    # Prepare default result
+    result = {
+        "city": city or None,
+        "lat": float(lat) if lat else None,
+        "lon": float(lon) if lon else None,
+        "temperature": None,
+        "humidity": None,
+        "pressure": None,
+        "weather": None,
+        "wind_speed": None,
+    }
+
+    # If lat/lon or city available, fetch weather
+    if (lat and lon) or city:
+        try:
+            owm_url = "https://api.openweathermap.org/data/2.5/weather"
+            params = {"appid": settings.OPENWEATHER_API_KEY, "units": "metric"}
+            if lat and lon:
+                params.update({"lat": lat, "lon": lon})
+            elif city:
+                params.update({"q": city})
+
+            r = requests.get(owm_url, params=params, timeout=5)
+            if r.status_code == 200:
+                data = r.json()
+                result.update({
+                    "city": data.get("name") or result["city"],
+                    "lat": data["coord"].get("lat") if data.get("coord") else result["lat"],
+                    "lon": data["coord"].get("lon") if data.get("coord") else result["lon"],
+                    "temperature": data["main"].get("temp") if data.get("main") else None,
+                    "humidity": data["main"].get("humidity") if data.get("main") else None,
+                    "pressure": data["main"].get("pressure") if data.get("main") else None,
+                    "weather": data["weather"][0].get("description") if data.get("weather") else None,
+                    "wind_speed": data["wind"].get("speed") if data.get("wind") else None,
+                })
+        except:
+            # Ignore all exceptions, return defaults
+            pass
+
+    return result

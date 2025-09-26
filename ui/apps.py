@@ -45,6 +45,8 @@ class UiConfig(AppConfig):
                         "danger": tweaks.danger_button,
                         "success": tweaks.success_button,
                     },
+                    "list_filter_select": True,  # enables better filter UI
+                    "horizontal_filter": True,   # must be True to show Available / Chosen columns
                 }
             else:
                 logger.warning("⚠️ No active Jazzmin UI tweaks found.")

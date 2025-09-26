@@ -27,18 +27,15 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 REST_FRAMEWORK = {
-    # Custom JSON renderer
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "customer.authentication.CookieJWTAuthentication",
+    ],
     "DEFAULT_RENDERER_CLASSES": [
         "utils.renderers.PrettyJSONRenderer",
         "rest_framework.renderers.BrowsableAPIRenderer",
     ],
-    # Parser for JSON requests
     "DEFAULT_PARSER_CLASSES": [
         "rest_framework.parsers.JSONParser",
-    ],
-    # JWT Authentication
-    "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
 }
 
@@ -54,13 +51,14 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "ui",
-    "iptvengine",
+    'iptvengine',
     'rest_framework',
     'customer',
     'partner',
     'mptt',
     'customadmin',
-     "import_export",
+    'import_export',
+    'launcher',
     
   
     # your other apps here
@@ -223,13 +221,21 @@ EMAIL_SUBJECT_PREFIX = '[SKYLINK] '  # Optional prefix for email subject lines
 
 MAX_DEVICES_PER_ACCOUNT = 2
 
-
+WATCH_HISTORY_LIMIT = 10
 # settings.py
 DEFAULT_OTP = "123456"
 
+OPENWEATHER_API_KEY = "038c22b09c8a980d989ca983b7dbbeab"
 
+from datetime import timedelta
 SIMPLE_JWT = {
-    'AUTH_COOKIE': 'JWT_TOKEN',        # Cookie name
-    'AUTH_COOKIE_SECURE': False,       # True in HTTPS
-    'AUTH_COOKIE_HTTP_ONLY': True,     # Recommended
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=7),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_COOKIE": "JWT_TOKEN",          # cookie name
+    "AUTH_COOKIE_HTTP_ONLY": True,       # JS cannot read the cookie
+    "AUTH_COOKIE_SECURE": False,         # True if using HTTPS
+    "AUTH_COOKIE_SAMESITE": "Lax",
+    
 }
+

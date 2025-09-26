@@ -81,6 +81,10 @@ class Customer(models.Model):
             self.customer_id = f"CUST{next_id:05d}"  # CUST00001 format
         super().save(*args, **kwargs)
 
+    def is_authenticated(self):
+        # Always True for authenticated customers
+        return True
+
     def __str__(self):
         return f"{self.customer_id} - {self.name or 'Unnamed'}"
 
@@ -141,16 +145,21 @@ class Setting(models.Model):
     def __str__(self):
         return f"Max Devices: {self.max_devices}"
 
+class Avatar(models.Model):
+    image = models.ImageField(upload_to="avatars/", null=True, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    is_active = models.BooleanField(default=True, null=True, blank=True)  # can be null
 
-
+    def __str__(self):
+        return self.image.name if self.image else "No Image"
 
 class Profile(models.Model):
     customer = models.ForeignKey(
         Customer,
         on_delete=models.CASCADE,
         related_name="profiles",
-        null=True,       # allow null in DB
-        blank=True       # allow blank in forms
+        null=True,
+        blank=True
     )
     profile_name = models.CharField(max_length=50, default="New Profile")
     profile_type = models.CharField(
@@ -158,12 +167,7 @@ class Profile(models.Model):
         choices=[("adult", "Adult"), ("kids", "Kids")],
         default="adult"
     )
-    avatar_url = models.URLField(
-        max_length=500,
-        null=True,
-        blank=True,
-        help_text="Full URL to avatar image"
-    )
+    avatar = models.ForeignKey(Avatar, null=True, blank=True, on_delete=models.SET_NULL)
     profile_code = models.CharField(
         max_length=15,
         unique=True,
@@ -172,6 +176,11 @@ class Profile(models.Model):
         blank=True
     )
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["customer", "profile_name"], name="unique_profile_per_customer")
+        ]
 
     def save(self, *args, **kwargs):
         if not self.profile_code:
@@ -188,3 +197,53 @@ class Profile(models.Model):
 
     def __str__(self):
         return f"{self.profile_name} ({self.customer.name if self.customer else 'No Customer'})"
+
+
+
+
+class WatchHistory(models.Model):
+    customer = models.ForeignKey(
+        "Customer",
+        on_delete=models.CASCADE,
+        related_name="watch_histories"
+    )
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="watch_histories", null=True, blank=True)
+
+    channel = models.ForeignKey(
+        "iptvengine.Channel",   # link to Channel model from iptvengine app
+        on_delete=models.CASCADE,
+        related_name="watch_histories"
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("profile", "channel")  # avoid duplicate channel history
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"{self.profile.profile_name} - {self.channel.name}"
+
+class Favorite(models.Model):
+    customer = models.ForeignKey(
+        "Customer",
+        on_delete=models.CASCADE,
+        related_name="favorite_channels"
+    )
+    profile = models.ForeignKey(
+        "Profile",
+        on_delete=models.CASCADE,
+        related_name="favorite_channels"
+    )
+    channel = models.ForeignKey(
+        "iptvengine.Channel",
+        on_delete=models.CASCADE,
+        related_name="favorited_by"  # ⚠ rename to avoid clash with Channel.favorite
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("profile", "channel")
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"{self.profile.profile_name} - {self.channel.name}"
