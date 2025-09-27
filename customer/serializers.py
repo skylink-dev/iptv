@@ -72,7 +72,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 class CustomerSerializer(serializers.ModelSerializer):
     # Nest the profiles serializer
     profiles = ProfileSerializer(many=True, read_only=True)
-
+    subscription_plan = serializers.StringRelatedField()
     class Meta:
         model = Customer
         fields = [
