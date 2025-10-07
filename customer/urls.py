@@ -1,12 +1,13 @@
 from django.urls import path, include
 from .views import otp_login_view, customer_api_root
-from .api_views import SendOTPAPIView, VerifyOTPAPIView, ReplaceDeviceAPIView, VerifyAuthToken, CustomerProfilesAPIView, CreateProfileAPIView, ProfileDetailByCodeAPIView, EditProfileAPIView,    DeleteProfileAPIView,    DeleteAllProfilesAPIView , AvailableAvatarsAPIView, AddWatchHistoryAPIView, GetWatchHistoryAPIView, DeleteAllWatchHistoryAPIView,  DeleteWatchHistoryItemAPIView, AddFavoriteAPIView, GetFavoriteAPIView, DeleteFavoriteItemAPIView, DeleteAllFavoritesAPIView
+from .api_views import SendOTPAPIView, VerifyOTPAPIView, ReplaceDeviceAPIView, VerifyAuthToken, CustomerProfilesAPIView, CreateProfileAPIView, ProfileDetailByCodeAPIView, EditProfileAPIView,    DeleteProfileAPIView,    DeleteAllProfilesAPIView , AvailableAvatarsAPIView, AddWatchHistoryAPIView, GetWatchHistoryAPIView, DeleteAllWatchHistoryAPIView,  DeleteWatchHistoryItemAPIView, AddFavoriteAPIView, GetFavoriteAPIView, DeleteFavoriteItemAPIView, DeleteAllFavoritesAPIView, GetUserChannels
 from rest_framework.routers import DefaultRouter
-
+from .api_views import DeviceViewSet
 # Router for ViewSets
 router = DefaultRouter()
+router.register(r'devices', DeviceViewSet, basename='device')
 
-
+urlpatterns = router.urls
 urlpatterns = [
 
 
@@ -50,5 +51,10 @@ urlpatterns = [
     path("favorites/", GetFavoriteAPIView.as_view(), name="get-favorites"),
     path("favorites/delete/<int:pk>/", DeleteFavoriteItemAPIView.as_view(), name="delete-favorite-item"),
     path("favorites/delete-all/", DeleteAllFavoritesAPIView.as_view(), name="delete-all-favorites"),
+
+    
+    # Channels
+    path('channels/', GetUserChannels.as_view(), name='user-channels'),
+    
 
 ]

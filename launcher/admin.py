@@ -46,10 +46,19 @@ class LauncherWallpaperAdmin(admin.ModelAdmin):
 # --- QuickNavigation Admin ---
 @admin.register(QuickNavigation)
 class QuickNavigationAdmin(admin.ModelAdmin):
-    list_display = ("title", "type", "backdrop", "isTrailer", "edit_button", "delete_button")
+    list_display = ("title", "type", "preview_image", "preview_backdrop", "isTrailer", "edit_button", "delete_button")
     list_filter = ("type", "isTrailer")
     search_fields = ("title", "description")
-    readonly_fields = ("id",)
+    readonly_fields = ("id", "image_preview", "backdrop_preview")
+
+    fieldsets = (
+        (None, {
+            "fields": ("title", "description", "type", "isTrailer")
+        }),
+        ("Media", {
+            "fields": ("image", "image_preview", "backdrop", "backdrop_preview", "suggestedContentUrl")
+        }),
+    )
 
     def edit_button(self, obj):
         return get_edit_button(obj, "launcher", "quicknavigation")
@@ -57,6 +66,35 @@ class QuickNavigationAdmin(admin.ModelAdmin):
     def delete_button(self, obj):
         return get_delete_button(obj, "launcher", "quicknavigation")
 
+    # 👇 Show preview in admin list
+    def preview_image(self, obj):
+        if obj.image:
+            return f'<img src="{obj.image.url}" width="60" height="40" style="object-fit:cover; border-radius:4px;" />'
+        return "No Image"
+    preview_image.allow_tags = True
+    preview_image.short_description = "Image"
+
+    def preview_backdrop(self, obj):
+        if obj.backdrop:
+            return f'<img src="{obj.backdrop.url}" width="100" height="50" style="object-fit:cover; border-radius:4px;" />'
+        return "No Backdrop"
+    preview_backdrop.allow_tags = True
+    preview_backdrop.short_description = "Backdrop"
+
+    # 👇 For readonly preview inside form
+    def image_preview(self, obj):
+        if obj.image:
+            return f'<img src="{obj.image.url}" width="200" height="120" style="object-fit:cover; border-radius:6px;" />'
+        return "No Image"
+    image_preview.allow_tags = True
+    image_preview.short_description = "Image Preview"
+
+    def backdrop_preview(self, obj):
+        if obj.backdrop:
+            return f'<img src="{obj.backdrop.url}" width="300" height="150" style="object-fit:cover; border-radius:6px;" />'
+        return "No Backdrop"
+    backdrop_preview.allow_tags = True
+    backdrop_preview.short_description = "Backdrop Preview"
 
 # --- SearchSuggestion Admin ---
 @admin.register(SearchSuggestion)

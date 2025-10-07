@@ -244,3 +244,21 @@ class FavoriteSerializer(serializers.ModelSerializer):
             "channel",
             "updated_at",
         ]
+
+
+class DeviceSerializer(serializers.ModelSerializer):
+    status = serializers.CharField(default='active')
+    class Meta:
+        model = Device
+        fields = [
+            'id',
+            'device_name',
+            'device_id',
+            'device_model',
+            'device_type',
+            'ip_address',
+            'last_login',
+            'status',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']

@@ -17,31 +17,44 @@ class LauncherWallpaperSerializer(serializers.ModelSerializer):
         return None
 
 
+
 class QuickNavigationSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
     backdrop = serializers.SerializerMethodField()
 
     class Meta:
         model = QuickNavigation
-        fields = ["id", "title", "description", "image", "backdrop", "suggestedContentUrl", "isTrailer", "type"]
+        fields = [
+            "id",
+            "title",
+            "description",
+            "image",
+            "backdrop",
+            "suggestedContentUrl",
+            "isTrailer",
+            "type",
+            "order"
+        ]
 
     def get_image(self, obj):
-        request = self.context.get("request")
-        if getattr(obj, "image", None):
-            try:
-                return request.build_absolute_uri(obj.image.url) if request else obj.image.url
-            except ValueError:
-                return None
-        return None
+        return self._build_full_url(obj.image) if obj.image else None
 
     def get_backdrop(self, obj):
+        return self._build_full_url(obj.backdrop) if obj.backdrop else None
+
+    def _build_full_url(self, file_field):
         request = self.context.get("request")
-        if getattr(obj, "backdrop", None):
-            try:
-                return request.build_absolute_uri(obj.backdrop.url) if request else obj.backdrop.url
-            except ValueError:
-                return None
-        return None
+        if not file_field:
+            return None
+        try:
+            if request:
+                return request.build_absolute_uri(file_field.url)
+            else:
+                # Fallback: manually construct absolute URL
+                domain = getattr(settings, "SITE_DOMAIN", "http://localhost:8000")
+                return f"{domain}{file_field.url}"
+        except ValueError:
+            return None
 
 
 class SearchSuggestionSerializer(serializers.ModelSerializer):
@@ -111,7 +124,7 @@ class CategorySerializer(serializers.ModelSerializer):
         if obj.category_type == "QUICK_NAV":
             return [
                 {"QuickNavigation": QuickNavigationSerializer(item, context=self.context).data}
-                for item in obj.quick_navigation.all()
+                for item in obj.quick_navigation.all().order_by("order") 
             ]
 
         elif obj.category_type == "SEARCH":
@@ -130,38 +143,62 @@ class CategorySerializer(serializers.ModelSerializer):
             ]
 
 
+        # elif obj.category_type == "LIVE_TV":  # or "CHANNEL_GENRE"
+        #     result = []
+        #     for genre in obj.channel_genres.all():
+        #         for channel in genre.channels.all():
+        #             result.append({
+        #                 genre.type: {   # type will be "BigLiveTv" or "LiveTv"
+        #                     "id": channel.id,
+        #                     "name": channel.name,
+                            
+        #                     "channel_id": channel.channel_id,
+        #                     "description" : channel.description,
+        #                        "is_payed" : channel.is_payed,
+        #                           "price" : channel.price,
+        #                            "order": getattr(channel, "order", 0),
+        #                     "favorite": getattr(channel, "favorite", False),
+        #                     "timeshift": getattr(channel, "timeshift", False),
+        #                     "adult": getattr(channel, "adult", False),
+        #                     "ppv": getattr(channel, "ppv", False),
+        #                     "ppv_link": getattr(channel, "ppv_link", None),
+        #                     "drm_type": getattr(channel, "drm_type", None),
+        #                     "status": getattr(channel, "status", None),
+        #                     "source_url": getattr(channel, "source_url", None),
+        #                     "license_url": getattr(channel, "license_url", None),
+                            
+        #                      "source_headers": None, 
+        #                      "logo": None, 
+        #                      "license_headers": None, 
+                            
+                            
+        #                 }
+        #             })
+        #     return result
+
+
         elif obj.category_type == "LIVE_TV":  # or "CHANNEL_GENRE"
             result = []
+            profile = self.context.get("profile")
+            request = self.context.get("request")
+
+            # Loop through genres linked to this category
             for genre in obj.channel_genres.all():
+                # Serialize each channel in the genre
                 for channel in genre.channels.all():
+                    channel_data = ChannelSerializer(channel, context={"request": request}).data
+                    # Optional: mark favorite if you have Favorite model
+                    if profile:
+                        is_fav = Favorite.objects.filter(profile=profile, channel=channel).exists()
+                        channel_data["favorite"] = is_fav
+                    else:
+                        channel_data["favorite"] = False
+
                     result.append({
-                        genre.type: {   # type will be "BigLiveTv" or "LiveTv"
-                            "id": channel.id,
-                            "name": channel.name,
-                            
-                            "channel_id": channel.channel_id,
-                            "description" : channel.description,
-                               "is_payed" : channel.is_payed,
-                                  "price" : channel.price,
-                                   "order": getattr(channel, "order", 0),
-                            "favorite": getattr(channel, "favorite", False),
-                            "timeshift": getattr(channel, "timeshift", False),
-                            "adult": getattr(channel, "adult", False),
-                            "ppv": getattr(channel, "ppv", False),
-                            "ppv_link": getattr(channel, "ppv_link", None),
-                            "drm_type": getattr(channel, "drm_type", None),
-                            "status": getattr(channel, "status", None),
-                            "source_url": getattr(channel, "source_url", None),
-                            "license_url": getattr(channel, "license_url", None),
-                            
-                             "source_headers": None, 
-                             "logo": None, 
-                             "license_headers": None, 
-                            
-                            
-                        }
+                        genre.type: channel_data  # genre.type is "BigLiveTv" or "LiveTv"
                     })
-            return result
+
+            return result if result else None
         
         elif obj.category_type == "FAVORITE":
             result = []
@@ -177,8 +214,9 @@ class CategorySerializer(serializers.ModelSerializer):
                     channel_data = ChannelSerializer(fav.channel, context={"request": request}).data
                     # Mark favorite as True
                     channel_data["favorite"] = True
-                    result.append({"BigLiveTV": channel_data})
-
+                    result.append({"BigLiveTv": channel_data})
+            if not result:
+                return None
             return result
         
                
@@ -196,9 +234,12 @@ class CategorySerializer(serializers.ModelSerializer):
                     channel_data = ChannelSerializer(fav.channel, context={"request": request}).data
                     # Mark favorite as True
                     channel_data["favorite"] = True
-                    result.append({"BigLiveTV": channel_data})
-
+                    result.append({"BigLiveTv": channel_data})
+            if not result:
+                return None
             return result
+        
+
         
 
         

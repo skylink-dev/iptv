@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     TariffViewSet, ChannelViewSet, ChannelGroupViewSet,
-    LanguageViewSet, CategoryViewSet, RadioViewSet
+    LanguageViewSet, CategoryViewSet, RadioViewSet, GetChannelEPGAPIView
 )
 
 router = DefaultRouter()
@@ -16,4 +16,5 @@ router.register(r'radios', RadioViewSet)
 
 urlpatterns = [
     path("", include(router.urls)),
+    path("channel/<int:channel_id>/epg/", GetChannelEPGAPIView.as_view(), name="channel-epg"),
 ]

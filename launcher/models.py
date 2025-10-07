@@ -43,13 +43,21 @@ class QuickNavigation(models.Model):
         default="quicknav/backdrops/default_backdrop.jpg"  # make sure this file exists in your media folder
     )
 
+     # New image field (thumbnail / poster image)
+    image = models.ImageField(
+        upload_to="quicknav/images/",
+        blank=True,
+        null=True,
+        default="quicknav/images/default_image.jpg"  # make sure default exists
+    )
+
     # Video URL with default
     suggestedContentUrl = models.URLField(
         blank=True,
         null=True,
         default="http://example.com/default_video.m3u8"
     )
-
+    order= models.IntegerField(default=0, db_index=True)  
     isTrailer = models.BooleanField(default=False)
     type = models.CharField(max_length=20, choices=TYPE_CHOICES, default="LIVETV")
 
@@ -71,11 +79,12 @@ class Category(models.Model):
         ("LIVE_TV", "Popular Live TV Channels"),
         ("FAVORITE", "Continue favorites"),
         ("WATCHLIST", "Continue Watching"),
+        ("STATIC_MOVIES", "Static Movies"),  
     ]
 
     name = models.CharField(max_length=200, unique=True, default="New Category")
     category_type = models.CharField(max_length=20, choices=CATEGORY_TYPE_CHOICES, default="QUICK_NAV")
-
+    order_id = models.PositiveIntegerField(default=0) 
     # Optional mappings
     search_suggestion = models.ForeignKey(
         "SearchSuggestion", blank=True, null=True, on_delete=models.SET_NULL

@@ -31,7 +31,7 @@ from launcher.models import LauncherWallpaper
 from launcher.serializers import LauncherWallpaperSerializer
 
 from iptvengine.models import Channel
-
+from iptvengine.serializers import ChannelSerializer
 
 
 class SendOTPAPIView(APIView):
@@ -466,7 +466,14 @@ class GetWatchHistoryAPIView(APIView):
 
         serializer = WatchHistorySerializer(history_qs, many=True, context={"request": request})
 
-        return Response({"status": 200, "data": serializer.data})
+        #return Response({"status": 200, "data": serializer.data})
+    
+    
+        return Response({
+            "status": 200,
+            "message": "Success",
+            "data": serializer.data   # ✅ directly serializer.data
+        })
 
 
 class DeleteAllWatchHistoryAPIView(APIView):
@@ -551,11 +558,18 @@ class GetFavoriteAPIView(APIView):
         if not profile:
             return Response({"status": 404, "message": "Profile not found"}, status=404)
 
-        favorites_qs = Favorite.objects.filter(profile=profile).select_related("channel").order_by("-updated_at")[:10]
+        favorites_qs = (
+            Favorite.objects.filter(profile=profile)
+            .select_related("channel")
+            .order_by("-updated_at")[:10]
+        )
         serializer = FavoriteSerializer(favorites_qs, many=True, context={"request": request})
 
-        return Response({"status": 200, "data": serializer.data})
-
+        return Response({
+            "status": 200,
+            "message": "Success",
+            "data": serializer.data   # ✅ directly serializer.data
+        })
 
 # Delete Single Favorite
 class DeleteFavoriteItemAPIView(APIView):
@@ -587,3 +601,157 @@ class DeleteAllFavoritesAPIView(APIView):
 
         deleted_count, _ = Favorite.objects.filter(profile=profile).delete()
         return Response({"status": 200, "message": f"All favorites deleted ({deleted_count} items)"})
+    
+
+from iptv_api.pagination import StandardResultsSetPagination
+
+class GetUserChannels(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        channels_qs = Channel.objects.all().order_by("order")
+        serializer = ChannelSerializer(channels_qs, many=True, context={'request': request})
+
+        return Response({
+            "status": 200,
+            "message": "Success",
+            "data": serializer.data
+        })
+    
+
+
+from .serializers import DeviceSerializer
+from rest_framework import viewsets, status
+from rest_framework.exceptions import ValidationError, NotFound
+from rest_framework.decorators import action
+
+
+class DeviceViewSet(viewsets.ModelViewSet):
+    serializer_class = DeviceSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_field = "device_id"  # Use device_id in URLs
+
+    # ---------------- Helper: get customer from headers ----------------
+    def get_customer_from_headers(self):
+        profile_code = self.request.headers.get("Current-Profile-Code")
+        if not profile_code:
+            return None
+        profile = Profile.objects.select_related("customer").filter(profile_code=profile_code).first()
+        if profile:
+            return profile.customer
+        return None
+
+    # ---------------- Queryset ----------------
+    def get_queryset(self):
+        customer = self.get_customer_from_headers()
+        if customer:
+            return Device.objects.filter(customer=customer).order_by("-created_at")
+        return Device.objects.none()
+
+    # ---------------- Create ----------------
+    def perform_create(self, serializer):
+        customer = self.get_customer_from_headers()
+        if not customer:
+            raise ValidationError({"status": 400, "message": "Invalid profile code", "data": {}})
+        serializer.save(customer=customer)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response({
+            "status": 200,
+            "message": "Device added successfully",
+            "data": serializer.data
+        })
+
+    # ---------------- Update ----------------
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response({
+            "status": 200,
+            "message": "Device updated successfully",
+            "data": serializer.data
+        })
+
+    # ---------------- List ----------------
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({
+            "status": 200,
+            "message": "Device list fetched successfully",
+            "data": serializer.data
+        })
+
+    # ---------------- Retrieve ----------------
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response({
+            "status": 200,
+            "message": "Device detail fetched successfully",
+            "data": serializer.data
+        })
+
+    # ---------------- Destroy (single delete) ----------------
+    def destroy(self, request, *args, **kwargs):
+        current_device_id = request.headers.get("Current-Device-Id")
+        device = self.get_object()
+
+        # Prevent deleting current device
+        if device.device_id == current_device_id:
+            return Response({
+                "status": 400,
+                "message": "Cannot delete the current device",
+                "data": {}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        device.delete()
+        return Response({
+            "status": 200,
+            "message": f"Device '{device.device_id}' deleted successfully",
+            "data": {}
+        })
+
+    # ---------------- Delete All Except Current Device ----------------
+    @action(detail=False, methods=["delete"], url_path="delete-all")
+    def delete_all_except_current(self, request):
+        current_device_id = request.headers.get("Current-Device-Id")
+        customer = self.get_customer_from_headers()
+        if not customer:
+            return Response({
+                "status": 400,
+                "message": "Invalid profile code",
+                "data": {}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        devices_to_delete = self.get_queryset()
+        if current_device_id:
+            devices_to_delete = devices_to_delete.exclude(device_id=current_device_id)
+
+        deleted_count, _ = devices_to_delete.delete()
+
+        return Response({
+            "status": 200,
+            "message": f"{deleted_count} device(s) deleted successfully",
+            "data": {}
+        })
+
+    # ---------------- Override get_object to return custom 404 ----------------
+    def get_object(self):
+        queryset = self.get_queryset()
+        device_id = self.kwargs.get(self.lookup_field)
+
+        obj = queryset.filter(device_id=device_id).first()
+        if not obj:
+            raise NotFound({
+                "status": 404,
+                "message": "No Device matches the given query.",
+                "data": {}
+            })
+        return obj

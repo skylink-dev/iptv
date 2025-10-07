@@ -11,7 +11,7 @@ from iptvengine.serializers import ChannelSerializer,RadioSerializer
 
 from django.db.models import Q
 from rest_framework.pagination import PageNumberPagination
-
+from .static_data.movies import STATIC_MOVIES
 
 class DashboardAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -26,15 +26,23 @@ class DashboardAPIView(APIView):
         if not profile:
             return Response({"status": 404, "message": "Profile not found"}, status=404)
 
-        categories = Category.objects.all()
+        categories = Category.objects.all().order_by("order_id")
 
         # Pass profile in serializer context
         serializer = CategorySerializer(categories, many=True, context={"request": request, "profile": profile})
 
+         # ✅ Static Movies block
+        
+
+        # ✅ Append static movies block
+        categories_data = serializer.data
+        categories_data.extend(STATIC_MOVIES)
+
         return Response({
             "status": 200,
             "message": "Success",
-            "data": {"categories": serializer.data}
+           # "data": {"categories": serializer.data}
+            "data": {"categories": categories_data}
         })
 class LauncherChannelSearchAPIView(APIView):
     permission_classes = [IsAuthenticated]
