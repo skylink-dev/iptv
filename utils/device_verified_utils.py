@@ -204,6 +204,7 @@ def get_weather(request):
                     "pressure": data["main"].get("pressure") if data.get("main") else None,
                     "weather": data["weather"][0].get("description") if data.get("weather") else None,
                     "wind_speed": data["wind"].get("speed") if data.get("wind") else None,
+                    "code": data["weather"][0].get("id") if data.get("weather") else None,
                 })
         except:
             # Ignore all exceptions, return defaults

@@ -390,25 +390,37 @@ class LanguageResource(resources.ModelResource):
    
 
 # Register in admin with import/export support
+from django.utils.html import format_html
+
 @admin.register(Language)
 class LanguageAdmin(ImportExportModelAdmin):
     resource_class = LanguageResource
-    list_display = ("id", "name", "action_buttons")
+    list_display = ("id", "name", "image_tag", "tv_banner_tag", "action_buttons")
     search_fields = ("name",)
-    
+
+    def image_tag(self, obj):
+        if obj.image:
+            return format_html('<img src="{}" width="50" />', obj.image.url)
+        return "-"
+    image_tag.short_description = "Image"
+
+    def tv_banner_tag(self, obj):
+        if obj.tv_banner:
+            return format_html('<img src="{}" width="100" />', obj.tv_banner.url)
+        return "-"
+    tv_banner_tag.short_description = "TV Banner"
+
     def action_buttons(self, obj):
-        """Custom Edit/Delete buttons in list view"""
         edit_url = reverse("admin:iptvengine_language_change", args=[obj.pk])
         delete_url = reverse("admin:iptvengine_language_delete", args=[obj.pk])
-
         return format_html(
             '<a class="btn btn-sm btn-primary" href="{}">Edit</a> '
             '<a class="btn btn-sm btn-danger" href="{}">Delete</a>',
             edit_url, delete_url
         )
-
     action_buttons.short_description = "Actions"
     action_buttons.allow_tags = True
+
 
 @admin.register(Category)
 class CategoryAdmin(CustomAdminActions):

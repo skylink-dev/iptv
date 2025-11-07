@@ -13,7 +13,7 @@ class LanguageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Language
-        fields = ("id", "name", "image_url", "display_order", "created_at")
+        fields = ("id", "name", "tv_banner", "image", "display_order", "created_at")
         read_only_fields = ("created_at",)
 
 

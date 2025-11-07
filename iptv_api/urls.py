@@ -23,6 +23,7 @@ urlpatterns = [
     path('api/', include('iptvengine.urls')),
     path('api/customer/', include('customer.urls')),
         path('api/launcher/', include('launcher.urls')),
+        path("api/movies/", include("movies.urls")),
 ]
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

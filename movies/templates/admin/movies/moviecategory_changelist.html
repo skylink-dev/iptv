@@ -1,0 +1,31 @@
+{% extends "admin/change_list.html" %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <style>
+        /* Custom button style for Fetch Movies */
+        .fetch-movies-btn {
+            background-color: #1d4ed8; /* Admin-blue style */
+            color: white;
+            padding: 8px 16px;
+            font-weight: bold;
+            border-radius: 6px;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+
+        .fetch-movies-btn:hover {
+            background-color: #2563eb; /* Slightly lighter on hover */
+            transform: scale(1.05);
+            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+        }
+    </style>
+{% endblock %}
+
+{% block object-tools-items %}
+    <li>
+        <a class="fetch-movies-btn" href="{% url 'admin:fetch_movies' %}">Fetch Movies from API</a>
+    </li>
+    {{ block.super }}
+{% endblock %}

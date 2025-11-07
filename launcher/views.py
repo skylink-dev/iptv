@@ -12,7 +12,7 @@ from iptvengine.serializers import ChannelSerializer,RadioSerializer
 from django.db.models import Q
 from rest_framework.pagination import PageNumberPagination
 from .static_data.movies import STATIC_MOVIES
-
+from movies.utils import get_dynamic_movies
 class DashboardAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -36,7 +36,9 @@ class DashboardAPIView(APIView):
 
         # ✅ Append static movies block
         categories_data = serializer.data
-        categories_data.extend(STATIC_MOVIES)
+        #categories_data.extend(STATIC_MOVIES)
+        categories_data.extend(get_dynamic_movies())
+        
 
         return Response({
             "status": 200,

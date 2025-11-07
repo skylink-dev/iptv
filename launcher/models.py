@@ -43,12 +43,21 @@ class QuickNavigation(models.Model):
         default="quicknav/backdrops/default_backdrop.jpg"  # make sure this file exists in your media folder
     )
 
-     # New image field (thumbnail / poster image)
-    image = models.ImageField(
-        upload_to="quicknav/images/",
+    # New image field (replacing old 'image')
+    focusedImage = models.ImageField(
+        upload_to="quicknav/images/unfocused/",
         blank=True,
         null=True,
-        default="quicknav/images/default_image.jpg"  # make sure default exists
+        default="quicknav/images/unfocused/default_unfocused.jpg"
+    )
+
+     # New image field (thumbnail / poster image)
+    # New image field (replacing old 'image')
+    unfocusedImage = models.ImageField(
+        upload_to="quicknav/images/unfocused/",
+        blank=True,
+        null=True,
+        default="quicknav/images/unfocused/default_unfocused.jpg"
     )
 
     # Video URL with default

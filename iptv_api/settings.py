@@ -59,7 +59,7 @@ INSTALLED_APPS = [
     'customadmin',
     'import_export',
     'launcher',
-    
+    'movies',
   
     # your other apps here
 ]

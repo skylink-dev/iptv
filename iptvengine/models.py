@@ -14,7 +14,16 @@ DRM_CHOICES = [
 # ------------------------------
 class Language(models.Model):
     name = models.CharField(max_length=100, unique=True, default="", db_index=True)
-    image_url = models.URLField(max_length=255, blank=True, null=True, default="")
+    image = models.ImageField(
+        upload_to="languages/images/",
+        blank=True,
+        null=True
+    )
+    tv_banner = models.ImageField(
+        upload_to="languages/banners/",
+        blank=True,
+        null=True
+    )
     display_order = models.PositiveIntegerField(default=0, db_index=True)
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
 

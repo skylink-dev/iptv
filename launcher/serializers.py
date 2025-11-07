@@ -16,10 +16,9 @@ class LauncherWallpaperSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(obj.media.url) if request else obj.media.url
         return None
 
-
-
 class QuickNavigationSerializer(serializers.ModelSerializer):
-    image = serializers.SerializerMethodField()
+    focused_image = serializers.SerializerMethodField()
+    unfocused_image = serializers.SerializerMethodField()
     backdrop = serializers.SerializerMethodField()
 
     class Meta:
@@ -28,7 +27,8 @@ class QuickNavigationSerializer(serializers.ModelSerializer):
             "id",
             "title",
             "description",
-            "image",
+            "focused_image",
+            "unfocused_image",
             "backdrop",
             "suggestedContentUrl",
             "isTrailer",
@@ -36,21 +36,24 @@ class QuickNavigationSerializer(serializers.ModelSerializer):
             "order"
         ]
 
-    def get_image(self, obj):
-        return self._build_full_url(obj.image) if obj.image else None
+    def get_focused_image(self, obj):
+        return self._build_full_url(obj.focusedImage)
+
+    def get_unfocused_image(self, obj):
+        return self._build_full_url(obj.unfocusedImage)
 
     def get_backdrop(self, obj):
-        return self._build_full_url(obj.backdrop) if obj.backdrop else None
+        return self._build_full_url(obj.backdrop)
 
     def _build_full_url(self, file_field):
-        request = self.context.get("request")
         if not file_field:
             return None
+        request = self.context.get("request")
         try:
             if request:
                 return request.build_absolute_uri(file_field.url)
             else:
-                # Fallback: manually construct absolute URL
+                # fallback if no request in context
                 domain = getattr(settings, "SITE_DOMAIN", "http://localhost:8000")
                 return f"{domain}{file_field.url}"
         except ValueError:
